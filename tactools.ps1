@@ -7,7 +7,7 @@ $dir = split-path $scriptpath
 
 function set-ADautologin {
 
-    function fqdn {
+  function fqdn {
     <#Query DB for the FQDN of HQ #>
     $query = 'SELECT fqdn FROM switches WHERE switchID = 1;'
     $Command = New-Object MySql.Data.MySqlClient.MySqlCommand($Query, $Connection)
@@ -72,12 +72,12 @@ function test-wss
   $volume = Read-host -prompt "What volume is your Shoreline Data folder on, please include the :\ (ie C:\ or E:\)"
   $wsspath = $volume + 'shoreline data\keystore\wss\1.key'
   if (!(test-path $wsspath) )
-    {write-warning "1.key file does not exist"}
-    else
-    {""
+  {write-warning "1.key file does not exist"}
+  else
+  {""
     "No trouble found"
     ""
-    }
+  }
     
 }
 
@@ -119,8 +119,8 @@ function restore-clientinstall
   {
     Y
     {
-        c:\windows\system32\inetsrv\appcmd.exe set vdir "Default web site/shorewareresources/" -physicalpath:"C:\Program Files (x86)\Shoreline Communications\ShoreWare Server\ShoreWare Resources"
-        ""
+      c:\windows\system32\inetsrv\appcmd.exe set vdir "Default web site/shorewareresources/" -physicalpath:"C:\Program Files (x86)\Shoreline Communications\ShoreWare Server\ShoreWare Resources"
+      ""
       "We think we've fixed it! Please test the Client Install Page."
       sleep 5
       ""
@@ -129,9 +129,9 @@ function restore-clientinstall
 
     N
     {
-        "Please contact TAC, Tac Tools cannot automate this fix ... Yet"
-        Sleep 5
-        ""
+      "Please contact TAC, Tac Tools cannot automate this fix ... Yet"
+      Sleep 5
+      ""
     }
   }
   
@@ -140,50 +140,50 @@ function restore-clientinstall
 function test-cas
 {
   <#check IIS bindings#>
-      Echo ""
-      Echo "Checking IIS binding vs Keystore"
-      Echo ""
-      Echo ""
+  Echo ""
+  Echo "Checking IIS binding vs Keystore"
+  Echo ""
+  Echo ""
     
-      $iisbinding = Get-ChildItem -path IIS:\SslBindings | where-object {$_.port -eq 443}
-      $iisthumbprint=$iisbinding.thumbprint
-      $sdpath = Read-host -prompt "What volume is your Shoreline Data folder on, please include the :\ (ie C:\ or E:\)"
-      $certpath1 = $sdpath + 'shoreline data\keystore\certs\server.crt'
-      $servercert = openssl x509 -noout -fingerprint -in $certpath1 
+  $iisbinding = Get-ChildItem -path IIS:\SslBindings | where-object {$_.port -eq 443}
+  $iisthumbprint=$iisbinding.thumbprint
+  $sdpath = Read-host -prompt "What volume is your Shoreline Data folder on, please include the :\ (ie C:\ or E:\)"
+  $certpath1 = $sdpath + 'shoreline data\keystore\certs\server.crt'
+  $servercert = openssl x509 -noout -fingerprint -in $certpath1 
     
-        If ($iisthumbprint=$servercert)
-      {
-        write-host "IIS binding matches Keystore" -foregroundcolor Green
-      }
-        else
-      {
-        write-host "IIS binding does not match keystore" -ForegroundColor Red
-      }       
-      Sleep 2
+  If ($iisthumbprint=$servercert)
+  {
+    write-host "IIS binding matches Keystore" -foregroundcolor Green
+  }
+  else
+  {
+    write-host "IIS binding does not match keystore" -ForegroundColor Red
+  }       
+  Sleep 2
     
-      Echo " "
+  Echo " "
 
   <#end check IIS bindings#>
   <#Check Server.crt and Private.key to make sure they match#>
   "Checking server.crt and server.key to ensure there is no private key mismatch"  
   
-     $certpath1 = $SDpath + 'shoreline data\keystore\certs\server.crt'
-     $owncertmod = openssl x509 -noout -modulus -in $certpath1 
-     $keypath = $SDpath + 'shoreline data\keystore\private\server.key'
-     $ownkeymod = openssl rsa -noout -modulus -in $keypath
+  $certpath1 = $SDpath + 'shoreline data\keystore\certs\server.crt'
+  $owncertmod = openssl x509 -noout -modulus -in $certpath1 
+  $keypath = $SDpath + 'shoreline data\keystore\private\server.key'
+  $ownkeymod = openssl rsa -noout -modulus -in $keypath
         
-      $matchcheck = $owncertmod -eq $ownkeymod
-      IF ($matchcheck -eq $True)
-      {
-        Write-host "Your certificate and private key match" -foregroundcolor Green
-      ""
-      }
-      else
-      {   
-        Write-host "Your certificate and private key do not match, you will have to revert to self-signed certificates and then reinstall your 3rd party certs using the proper key." -foregroundcolor Red
-        "You can use option 1 to in TacTools to verify your certificate and private key match prior to uploading."
-      }
-      Sleep 5
+  $matchcheck = $owncertmod -eq $ownkeymod
+  IF ($matchcheck -eq $True)
+  {
+    Write-host "Your certificate and private key match" -foregroundcolor Green
+    ""
+  }
+  else
+  {   
+    Write-host "Your certificate and private key do not match, you will have to revert to self-signed certificates and then reinstall your 3rd party certs using the proper key." -foregroundcolor Red
+    "You can use option 1 to in TacTools to verify your certificate and private key match prior to uploading."
+  }
+  Sleep 5
   
   <# Check server.crt and nginx.crt certificates to see if they match #>
 
@@ -234,161 +234,161 @@ function test-cas
 
 
   <#Checking IIS logs, service IP, intermediates in root store #>
-   Echo "Checking if Shoretel HW Root is Present"
-      $HWroot = Get-ChildItem Cert:\LocalMachine\Root | Where-object{$_.Thumbprint -eq "‎191a1c5696f2bff780d0187f5735040e5caf2b0d"}
-      If (!$hwroot) 
-      {
+  Echo "Checking if Shoretel HW Root is Present"
+  $HWroot = Get-ChildItem Cert:\LocalMachine\Root | Where-object{$_.Thumbprint -eq "‎191a1c5696f2bff780d0187f5735040e5caf2b0d"}
+  If (!$hwroot) 
+  {
        
-        write-host "HW Root is not installed, CAS authentication will fail" -ForegroundColor Red
-        $importroot = read-host -prompt "Would you like to reimport the HW root certificate to the trusted root store? Y/N"
+    write-host "HW Root is not installed, CAS authentication will fail" -ForegroundColor Red
+    $importroot = read-host -prompt "Would you like to reimport the HW root certificate to the trusted root store? Y/N"
         
-        Switch ($importroot) 
-        { 
-          Y 
-          {
-            <#$SDpath = Read-host -prompt "What volume is your Shoreline Data folder on, please include the :\ (ie C:\ or E:\)"#>
-            $hwrootpath = $SDpath + 'shoreline data\keystore\certs\shoretel_mfg_ca.crt'
-            Set-Location -path Cert:\LocalMachine\Root
-            Import-Certificate -filepath $HWrootpath
-            ECHO ""
-            Write-host "Shoretel HW Root has been imported."
-            Sleep 5
-         
-          }
-        
-          N 
-          {
-            sleep 1
-          }
-        }
-      }
-
-
-      else
-        {
-        write-host "HW root is installed" -foregroundcolor Green
-        Sleep 2
-        $hwrootinstalled = "1"
-        }
-
-        echo ""
-        echo ""
-    
-    
-      Write-host "Checking IIS log file for 403 Forbidden"
-      Sleep 2
-      $inetpub = 'C:\inetpub\logs\LogFiles\W3SVC1'
-      $IISlog = gci $inetpub | sort lastwritetime | select -last 1
-      $IIS403 = select-string -path $IISlog -pattern \bcertauth.*2148204809
-      IF (($IIS403 -ne $null) -and ($HWrootinstalled = "1"))
+    Switch ($importroot) 
+    { 
+      Y 
       {
-        ""
-        ""
-        write-host "IIS log contains 403 errors on certauth subdirectory and HW root is installed. IF you did not just install the HW root certificate this is normally caused by improper intermediate certificates installed in the trusted root store. The script will now check for improperly installed intermediate certificates." -foregroundcolor red
-        echo ""
-        echo ""
-        Sleep 8
+        <#$SDpath = Read-host -prompt "What volume is your Shoreline Data folder on, please include the :\ (ie C:\ or E:\)"#>
+        $hwrootpath = $SDpath + 'shoreline data\keystore\certs\shoretel_mfg_ca.crt'
+        Set-Location -path Cert:\LocalMachine\Root
+        Import-Certificate -filepath $HWrootpath
+        ECHO ""
+        Write-host "Shoretel HW Root has been imported."
+        Sleep 5
+         
+      }
+        
+      N 
+      {
+        sleep 1
+      }
+    }
+  }
 
-        $intcertinroot = Get-Childitem cert:\LocalMachine\root -Recurse | Where-Object {$_.Issuer -ne $_.Subject}
 
-        IF ($intcertinroot -ne $null)
-        {
-            write-host "Intermediate certificates have been detected in the Windows Trusted Root Store, this may cause CAS functionality to fail"
-            $getcertlist = Read-Host -prompt "Would you like to export a list of certificates that are installed in the wrong store? Y/N"
+  else
+  {
+    write-host "HW root is installed" -foregroundcolor Green
+    Sleep 2
+    $hwrootinstalled = "1"
+  }
+
+  echo ""
+  echo ""
+    
+    
+  Write-host "Checking IIS log file for 403 Forbidden"
+  Sleep 2
+  $inetpub = 'C:\inetpub\logs\LogFiles\W3SVC1'
+  $IISlog = gci $inetpub | sort lastwritetime | select -last 1
+  $IIS403 = select-string -path $IISlog -pattern \bcertauth.*2148204809
+  IF (($IIS403 -ne $null) -and ($HWrootinstalled = "1"))
+  {
+    ""
+    ""
+    write-host "IIS log contains 403 errors on certauth subdirectory and HW root is installed. IF you did not just install the HW root certificate this is normally caused by improper intermediate certificates installed in the trusted root store. The script will now check for improperly installed intermediate certificates." -foregroundcolor red
+    echo ""
+    echo ""
+    Sleep 8
+
+    $intcertinroot = Get-Childitem cert:\LocalMachine\root -Recurse | Where-Object {$_.Issuer -ne $_.Subject}
+
+    IF ($intcertinroot -ne $null)
+    {
+      write-host "Intermediate certificates have been detected in the Windows Trusted Root Store, this may cause CAS functionality to fail"
+      $getcertlist = Read-Host -prompt "Would you like to export a list of certificates that are installed in the wrong store? Y/N"
             
 
       
-          Switch ($getcertlist)
-          {
+      Switch ($getcertlist)
+      {
          
-            Y  {
-              Get-Childitem cert:\LocalMachine\root -Recurse | Where-Object {$_.Issuer -ne $_.Subject} | Format-List * | Out-File "c:\certlist.txt"
-              write-host "List of certificates has been exported to c:\certlist"
-            }
-            N
-            {
-              ""
-              write-host "You have chosen not to export the list of certificates"
-              ""
-            }
+        Y  {
+          Get-Childitem cert:\LocalMachine\root -Recurse | Where-Object {$_.Issuer -ne $_.Subject} | Format-List * | Out-File "c:\certlist.txt"
+          write-host "List of certificates has been exported to c:\certlist"
+        }
+        N
+        {
+          ""
+          write-host "You have chosen not to export the list of certificates"
+          ""
+        }
 
-          }
+      }
             
      
-          $clientauth = Read-Host -prompt "Would you like to put in a registry key to work around this problem? The registry alters the way certificate chain validation is carried out. More information can be found here https://oneview.mitel.com/s/article/IP400-Series-Phones-Fail-to-Connect-to-CAS     Y/N"
+      $clientauth = Read-Host -prompt "Would you like to put in a registry key to work around this problem? The registry alters the way certificate chain validation is carried out. More information can be found here https://oneview.mitel.com/s/article/IP400-Series-Phones-Fail-to-Connect-to-CAS     Y/N"
 
-          Switch ($clientauth)
-          {
+      Switch ($clientauth)
+      {
           
-            Y {
-              ""
-              New-ItemProperty -Path HKLM:\System\CurrentControlSet\Control\SecurityProviders\SCHANNEL\ -Name ClientAuthTrustMode -Value 2 -propertytype "DWord"
-              Write-host "Registry key has been imported, you should re-test CAS functionality"
-            }
-        
-            N {
-              ""
-              Write-host "No action has been taken, if you continue to have CAS problems, please contact Mitel support, or run this script again and attempt the registry key workaround. Other common causes of CAS functionality failures are DNS related or the service IP address being incorrect in the registry."
-              write-host "If opening a case with TAC, please reproduce the problem on a phone and upload phone logs to the case"
-              ""
-              sleep 8
-            }
-          }
-
+        Y {
+          ""
+          New-ItemProperty -Path HKLM:\System\CurrentControlSet\Control\SecurityProviders\SCHANNEL\ -Name ClientAuthTrustMode -Value 2 -propertytype "DWord"
+          Write-host "Registry key has been imported, you should re-test CAS functionality"
         }
-
-        else 
-        {
-          write-host "No improperly installed intermediate certificates were found"
-        }
-
-      }
         
-      else
-        {
-        ""
-        ""
-        write-host "IIS logs do not contain 403 errors. CAS issues are not caused by missing HW root or certificate store issues." -foregroundcolor green
-        write-host "Other common causes of CAS functionality failures are DNS related or the service IP address being incorrect in the registry."
-        write-host "If opening a case with TAC, please reproduce the problem on a phone and upload phone logs to the case"
-        echo ""
-        
-        Sleep 8
+        N {
+          ""
+          Write-host "No action has been taken, if you continue to have CAS problems, please contact Mitel support, or run this script again and attempt the registry key workaround. Other common causes of CAS functionality failures are DNS related or the service IP address being incorrect in the registry."
+          write-host "If opening a case with TAC, please reproduce the problem on a phone and upload phone logs to the case"
+          ""
+          sleep 8
         }
-
-      write-host "Checking Service IP address"
-      Sleep 3
-    
-      $env:HostIP = ( `
-        Get-NetIPConfiguration | `
-        Where-Object { `
-          $_.IPv4DefaultGateway -ne $null `
-          -and `
-          $_.NetAdapter.Status -ne "Disconnected" `
-        } `
-      ).IPv4Address.IPAddress
-
-      $serviceip = (Get-ItemProperty -path 'HKLM:\software\wow6432node\Shoreline Teleworks'-name serviceipaddress).serviceipaddress
-
-
-      If ($env:HostIP -eq $serviceip)
-      {
-        ""
-        ""
-        write-host "Service IP address is currently set to the IP address of the server. No action required." -foregroundcolor green
-        sleep 4
       }
 
-      else
-      {
-        write-host "Service IP address is set to" $serviceip "but we expected" $env:HostIP "These values should be the same. Please set the Service IP address to the IP address of the server and reboot."
-        sleep 4    
-      }
-
-
-
-    
     }
+
+    else 
+    {
+      write-host "No improperly installed intermediate certificates were found"
+    }
+
+  }
+        
+  else
+  {
+    ""
+    ""
+    write-host "IIS logs do not contain 403 errors. CAS issues are not caused by missing HW root or certificate store issues." -foregroundcolor green
+    write-host "Other common causes of CAS functionality failures are DNS related or the service IP address being incorrect in the registry."
+    write-host "If opening a case with TAC, please reproduce the problem on a phone and upload phone logs to the case"
+    echo ""
+        
+    Sleep 8
+  }
+
+  write-host "Checking Service IP address"
+  Sleep 3
+    
+  $env:HostIP = ( `
+    Get-NetIPConfiguration | `
+    Where-Object { `
+      $_.IPv4DefaultGateway -ne $null `
+      -and `
+      $_.NetAdapter.Status -ne "Disconnected" `
+    } `
+  ).IPv4Address.IPAddress
+
+  $serviceip = (Get-ItemProperty -path 'HKLM:\software\wow6432node\Shoreline Teleworks'-name serviceipaddress).serviceipaddress
+
+
+  If ($env:HostIP -eq $serviceip)
+  {
+    ""
+    ""
+    write-host "Service IP address is currently set to the IP address of the server. No action required." -foregroundcolor green
+    sleep 4
+  }
+
+  else
+  {
+    write-host "Service IP address is set to" $serviceip "but we expected" $env:HostIP "These values should be the same. Please set the Service IP address to the IP address of the server and reboot."
+    sleep 4    
+  }
+
+
+
+    
+}
     
 
 function get-processlist {
@@ -430,8 +430,52 @@ function get-processlist {
   write-output ''
   
  
- }
+}
 
+function set-sippassword {
+
+  function sippassword {
+
+    $query = 'UPDATE users 
+
+SET SIPPassword = "7F0738393A3B3C3D" 
+
+WHERE SIPPassword IS NULL'
+                              
+    $Command = New-Object MySql.Data.MySqlClient.MySqlCommand($Query, $Connection)
+    $DataAdapter = New-Object MySql.Data.MySqlClient.MySqlDataAdapter($Command)
+    $DataSet = New-Object System.Data.DataSet
+    $RecordCount = $dataAdapter.Fill($dataSet, "data")
+    $DataSet.Tables[0]
+    
+  }
+
+
+
+  $MySQLAdminUserName = 'root'
+  $MySQLAdminPassword = 'shorewaredba'
+  $MySQLDatabase = 'shoreware'
+  $MySQLHost = 'localhost'
+  $ConnectionString = "server=" + $MySQLHost + ";port=4308;uid=" + $MySQLAdminUserName + ";pwd=" + $MySQLAdminPassword + ";database="+$MySQLDatabase
+
+  [void][System.Reflection.Assembly]::LoadWithPartialName("MySql.Data")
+  $Connection = New-Object MySql.Data.MySqlClient.MySqlConnection
+  $Connection.ConnectionString = $ConnectionString
+  $Connection.Open()
+  
+  
+  sippassword
+  
+
+
+  $Connection.Close()
+  
+  
+  write-output 'SIP Passwords have been updated.'
+  write-output ''
+  
+ 
+}
 
 
 <# CHECKING ENABLED SSL PROTOCOLS---------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -447,7 +491,7 @@ function get-processlist {
     you may not use this file except in compliance with the License.
     You may obtain a copy of the License at
  
-     http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
  
     Unless required by applicable law or agreed to in writing, software
     distributed under the License is distributed on an "AS IS" BASIS,
@@ -473,49 +517,49 @@ function get-processlist {
     Tls                : True
     Tls11              : True
     Tls12              : True
- #>
- function Test-SslProtocols {
-    param(
-     [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true,ValueFromPipeline=$true)]
-     $ComputerName,
+#>
+function Test-SslProtocols {
+  param(
+    [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true,ValueFromPipeline=$true)]
+    $ComputerName,
      
-     [Parameter(ValueFromPipelineByPropertyName=$true)]
-     [int]$Port = 443
-    )
-    begin {
-     $ProtocolNames = [System.Security.Authentication.SslProtocols] | gm -static -MemberType Property | ?{$_.Name -notin @("Default","None")} | %{$_.Name}
-    }
-    process {
-     $ProtocolStatus = [Ordered]@{}
-     $ProtocolStatus.Add("ComputerName", $ComputerName)
-     $ProtocolStatus.Add("Port", $Port)
-     $ProtocolStatus.Add("KeyLength", $null)
-     $ProtocolStatus.Add("SignatureAlgorithm", $null)
+    [Parameter(ValueFromPipelineByPropertyName=$true)]
+    [int]$Port = 443
+  )
+  begin {
+    $ProtocolNames = [System.Security.Authentication.SslProtocols] | gm -static -MemberType Property | ?{$_.Name -notin @("Default","None")} | %{$_.Name}
+  }
+  process {
+    $ProtocolStatus = [Ordered]@{}
+    $ProtocolStatus.Add("ComputerName", $ComputerName)
+    $ProtocolStatus.Add("Port", $Port)
+    $ProtocolStatus.Add("KeyLength", $null)
+    $ProtocolStatus.Add("SignatureAlgorithm", $null)
      
-     $ProtocolNames | %{
-       $ProtocolName = $_
-       $Socket = New-Object System.Net.Sockets.Socket([System.Net.Sockets.SocketType]::Stream, [System.Net.Sockets.ProtocolType]::Tcp)
-       $Socket.Connect($ComputerName, $Port)
-       try {
-         $NetStream = New-Object System.Net.Sockets.NetworkStream($Socket, $true)
-         $SslStream = New-Object System.Net.Security.SslStream($NetStream, $true)
-         $SslStream.AuthenticateAsClient($ComputerName,  $null, $ProtocolName, $false )
-         $RemoteCertificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]$SslStream.RemoteCertificate
-         $ProtocolStatus["KeyLength"] = $RemoteCertificate.PublicKey.Key.KeySize
-         $ProtocolStatus["SignatureAlgorithm"] = $RemoteCertificate.SignatureAlgorithm.FriendlyName
-         $ProtocolStatus["Certificate"] = $RemoteCertificate
-         $ProtocolStatus.Add($ProtocolName, $true)
-       } catch  {
-         $ProtocolStatus.Add($ProtocolName, $false)
-       } finally {
-         $SslStream.Close()
-       }
-     }
-     [PSCustomObject]$ProtocolStatus
+    $ProtocolNames | %{
+      $ProtocolName = $_
+      $Socket = New-Object System.Net.Sockets.Socket([System.Net.Sockets.SocketType]::Stream, [System.Net.Sockets.ProtocolType]::Tcp)
+      $Socket.Connect($ComputerName, $Port)
+      try {
+        $NetStream = New-Object System.Net.Sockets.NetworkStream($Socket, $true)
+        $SslStream = New-Object System.Net.Security.SslStream($NetStream, $true)
+        $SslStream.AuthenticateAsClient($ComputerName,  $null, $ProtocolName, $false )
+        $RemoteCertificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]$SslStream.RemoteCertificate
+        $ProtocolStatus["KeyLength"] = $RemoteCertificate.PublicKey.Key.KeySize
+        $ProtocolStatus["SignatureAlgorithm"] = $RemoteCertificate.SignatureAlgorithm.FriendlyName
+        $ProtocolStatus["Certificate"] = $RemoteCertificate
+        $ProtocolStatus.Add($ProtocolName, $true)
+      } catch  {
+        $ProtocolStatus.Add($ProtocolName, $false)
+      } finally {
+        $SslStream.Close()
+      }
     }
-    }
+    [PSCustomObject]$ProtocolStatus
+  }
+}
  
- <# END OF SSL CHECK MODULES #>
+<# END OF SSL CHECK MODULES #>
 
 function  get-totalrtcscore {
 
@@ -565,7 +609,7 @@ function  get-totalrtcscore {
   write-output ''
   
  
- }
+}
 function get-rtcscore {
 
   function rtcscore {
@@ -626,7 +670,7 @@ function get-rtcscore {
   write-output ''
   
  
- }
+}
 
 function Install-Prereqs {
   <# This function checks the windows version of the machine and then will install prerequisite Roles/features #>
@@ -757,7 +801,7 @@ import-module WebAdministration
 <#Menu#>
 do {   
     
-    Write-output  '===================Mitel TAC Powershell Toolkit 1.03 ==================='
+  Write-output  '===================Mitel TAC Powershell Toolkit 1.03 ==================='
 
   Write-output  "1: Provide certificate and private key to check - READ ONLY"
   Write-output  "2: Decrypt private key -"
@@ -772,7 +816,8 @@ do {
   write-output  "11: Restore ClientInstall page"
   write-output  "12: Get LDAP Path"
   write-output  "13: Setup AD auto-login on HQ KB 000014134"
-  write-output  "14: Quit"
+  write-output  "14: Correct Blank SIP Passwords"
+  write-output  "15: Quit"
 
 
   $Choice = read-host -prompt "Please make a selection"
@@ -783,11 +828,11 @@ do {
  
 
     "1"{
-        $owncertpath = read-host -prompt 'Please enter the full path to your certificate public key (Example c:\certs\wildcard.crt)'
-        $ownkeypath =  read-host -prompt 'Please enter the full path to your private key (Example c:\certs\key.key)'
-        $owncertmod = openssl x509 -noout -modulus -in $owncertpath 
-        $ownkeymod = openssl rsa -noout -modulus -in $ownkeypath
-        $matchcheck = $owncertmod -eq $ownkeymod
+      $owncertpath = read-host -prompt 'Please enter the full path to your certificate public key (Example c:\certs\wildcard.crt)'
+      $ownkeypath =  read-host -prompt 'Please enter the full path to your private key (Example c:\certs\key.key)'
+      $owncertmod = openssl x509 -noout -modulus -in $owncertpath 
+      $ownkeymod = openssl rsa -noout -modulus -in $ownkeypath
+      $matchcheck = $owncertmod -eq $ownkeymod
       IF ($matchcheck -eq $True)
       {
         Write-host "Your certificate and private key match" -foregroundcolor Green
@@ -842,14 +887,14 @@ do {
     }
 
     "4"
-     {
+    {
       get-prereqs
-     }
+    }
       
     "5"
-     {
+    {
       install-prereqs
-     }
+    }
      
     "6"
     {
@@ -887,5 +932,9 @@ do {
     {
       set-adautologin
     }
+    "14"
+    {
+      set-sippassword
+    }
   }
-} While ($choice -ne 14)
+} While ($choice -ne 15)
