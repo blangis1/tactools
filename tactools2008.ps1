@@ -4,6 +4,52 @@ $dir = split-path $scriptpath
 [void][system.reflection.Assembly]::LoadFrom("$dir" + "\MySql.Data.dll")
 
 <#Defining all functions#>
+function set-sippassword {
+
+  function sippassword {
+
+    $query = 'UPDATE users 
+
+SET SIPPassword = "7F0738393A3B3C3D" 
+
+WHERE SIPPassword IS NULL'
+                              
+    $Command = New-Object MySql.Data.MySqlClient.MySqlCommand($Query, $Connection)
+    $DataAdapter = New-Object MySql.Data.MySqlClient.MySqlDataAdapter($Command)
+    $DataSet = New-Object System.Data.DataSet
+    $RecordCount = $dataAdapter.Fill($dataSet, "data")
+    $DataSet.Tables[0]
+    
+  }
+
+
+
+  $MySQLAdminUserName = 'root'
+  $MySQLAdminPassword = 'shorewaredba'
+  $MySQLDatabase = 'shoreware'
+  $MySQLHost = 'localhost'
+  $ConnectionString = "server=" + $MySQLHost + ";port=4308;uid=" + $MySQLAdminUserName + ";pwd=" + $MySQLAdminPassword + ";database="+$MySQLDatabase
+
+  [void][System.Reflection.Assembly]::LoadWithPartialName("MySql.Data")
+  $Connection = New-Object MySql.Data.MySqlClient.MySqlConnection
+  $Connection.ConnectionString = $ConnectionString
+  $Connection.Open()
+  
+  
+  sippassword
+  
+
+
+  $Connection.Close()
+  
+  
+  write-output 'SIP Passwords have been updated.'
+  write-output ''
+  
+ 
+}
+
+
 
 function set-ADautologin {
 
@@ -770,7 +816,9 @@ do {
   write-output  "10: Get Database process list"
   write-output  "11: Restore ClientInstall page"
   write-output  "12: Get LDAP Path"
-  write-output  "13: Quit"
+  write-output  "13: Set AD Auto Login"
+  write-output  "14: Correct blank SIP password"
+  write-output  "15: Quit"
 
 
   $Choice = read-host -prompt "Please make a selection"
@@ -795,31 +843,6 @@ do {
         Write-host "Your certificate and private key do not match" -foregroundcolor Red
       }
       Sleep 5
-    }
-
-
-    "2"
-    {
-      Echo "This script will compare the server.crt and server.key file from your keystore to ensure they match."
-      Echo " "
-      Echo " "
-      $volume = Read-host -prompt "What volume is your Shoreline Data folder on, please include the :\ (ie C:\ or E:\)"
-      $certpath = $volume + 'shoreline data\keystore\certs\server.crt'
-      $privkeypath = $volume + 'shoreline data\keystore\private\server.key'
-      $cert = openssl x509 -noout -modulus -in $certpath 
-      $privkey = openssl rsa -noout -modulus -in $privkeypath 
-      $matchcheck = $cert -eq $privkey
-      IF ($matchcheck -eq $True)
-      {
-        Write-host "Your certificate and private key match" -foregroundcolor Green
-      }
-      else
-      {   
-        Write-host "Your certificate and private key do not match" -foregroundcolor Red
-      }
-  
-      Sleep 5
-
     }
 
     "2"
@@ -856,10 +879,9 @@ do {
       
     "7"
     {
-      $hostname = read-host -prompt "What is the FQDN of the server you would like to test. This FQDN should be what is set in director."
-      Test-SslProtocols $hostname 
-
+      "This does not function on Server 2008"
     }
+    
     "8"
     {
       get-totalrtcscore
@@ -885,5 +907,9 @@ do {
     {
       set-adautologin
     }
+    "14"
+    {
+      set-sippassword
+    }
   }
-} While ($choice -ne 14)
+} While ($choice -ne 15)
