@@ -4,6 +4,85 @@ $dir = split-path $scriptpath
 [void][system.reflection.Assembly]::LoadFrom("$dir" + "\MySql.Data.dll")
 
 <#Defining all functions#>
+
+function test-tls1 
+{
+  ""
+  "Checking if TLS 1.0 is disabled"
+  sleep 2
+  $path = "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.0\server"
+  if(Test-Path -path $path )
+  {
+    $val = get-itemproperty -path $path | select-object enabled
+  
+    if ($val.enabled -eq 0)
+    {
+      write-host "TLS 1.0 is disabled and CAS functionality will be impacted" -foregroundcolor Red
+      sleep 3
+    } 
+    else
+    {
+      write-host "TLS 1.0 is Enabled" -ForegroundColor Green
+      Sleep 3
+    }
+  }
+
+}
+function get-bcamap {
+
+  function bcamap {
+
+    $query = 'SELECT DISTINCT t1.BCAEXT, t1.switchid AS "BCA Current Switch", t1.callstackdepth AS "BCA CallStack", t1.userdn AS MonitoringDN, t2.currentswitchid AS "Monitoring Users Current Switch" 
+FROM
+(SELECT mae_dn AS BCAEXT, maes.switchID, userprogbuttons.userdn,callstackdepth 
+FROM maes
+LEFT JOIN userprogbuttons
+ON mae_dn = userprogbuttons.dialnumberdn 
+) AS T1
+
+LEFT JOIN
+(SELECT userprogbuttons.userdn, usercurrentswitch.currentswitchid
+FROM userprogbuttons
+LEFT JOIN usercurrentswitch
+ON userprogbuttons.userdn = usercurrentswitch.userdn) AS T2
+ON (t1.userdn = t2.userdn) 
+ORDER BY monitoringdn
+;'
+                              
+    $Command = New-Object MySql.Data.MySqlClient.MySqlCommand($Query, $Connection)
+    $DataAdapter = New-Object MySql.Data.MySqlClient.MySqlDataAdapter($Command)
+    $DataSet = New-Object System.Data.DataSet
+    $RecordCount = $dataAdapter.Fill($dataSet, "data")
+    $DataSet.Tables[0]
+    
+  }
+
+
+
+  $MySQLAdminUserName = 'root'
+  $MySQLAdminPassword = 'shorewaredba'
+  $MySQLDatabase = 'shoreware'
+  $MySQLHost = 'localhost'
+  $ConnectionString = "server=" + $MySQLHost + ";port=4308;uid=" + $MySQLAdminUserName + ";pwd=" + $MySQLAdminPassword + ";database="+$MySQLDatabase
+
+  [void][System.Reflection.Assembly]::LoadWithPartialName("MySql.Data")
+  $Connection = New-Object MySql.Data.MySqlClient.MySqlConnection
+  $Connection.ConnectionString = $ConnectionString
+  $Connection.Open()
+  
+  
+  bcamap | ft
+  
+
+
+  $Connection.Close()
+  
+  
+  write-output ''
+  write-output ''
+  
+ 
+}
 function set-sippassword {
 
   function sippassword {
@@ -144,10 +223,21 @@ function get-ldappath
   elseif ($count -eq "3")
   {
     "Your LDAP Path should be:"
-    "LDAP://" + $domain + "/dc="+$domainarray[0]+",dc="+$domainarray[1] + ",dc="+$domainarray[3]
+    "LDAP://" + $domain + "/dc="+$domainarray[0]+",dc="+$domainarray[1] + ",dc="+$domainarray[2]
     ""
-    Sleep 5
+    Sleep 2
   }
+  Add-Type -AssemblyName System.DirectoryServices.AccountManagement            
+  $UserPrincipal = [System.DirectoryServices.AccountManagement.UserPrincipal]::Current            
+  if($UserPrincipal.ContextType -eq "Machine") {            
+    return "We can't recommend username format as you are not logged in with a domain account."            
+  } elseif($UserPrincipal.ContextType -eq "Domain") {
+    $unformat = whoami            
+    "The username format that should be used in Director is " + $unformat 
+    ""
+    sleep 5          
+  }            
+   
 }
 
 function restore-clientinstall
@@ -163,7 +253,7 @@ function restore-clientinstall
   {
     Y
     {
-        c:\windows\system32\inetsrv\appcmd.exe set vdir "Default web site/shorewareresources/" -physicalpath:"C:\Program Files (x86)\Shoreline Communications\ShoreWare Server\ShoreWare Resources"
+      cmd /C 'c:\windows\system32\inetsrv\appcmd.exe set vdir "Default web site/shorewareresources/" -physicalpath:"C:\Program Files (x86)\Shoreline Communications\ShoreWare Server\ShoreWare Resources"'
         ""
       "We think we've fixed it! Please test the Client Install Page."
       sleep 5
@@ -429,7 +519,7 @@ function test-cas
         sleep 4    
       }
 
-
+      test-tls1
 
     
     }
@@ -815,10 +905,11 @@ do {
   write-output  "9: Test WSS for missing 1.key file"
   write-output  "10: Get Database process list"
   write-output  "11: Restore ClientInstall page"
-  write-output  "12: Get LDAP Path"
+  write-output  "12: Get LDAP Path / AD integration"
   write-output  "13: Set AD Auto Login"
   write-output  "14: Correct blank SIP password"
-  write-output  "15: Quit"
+  write-output  "15: Get BCA Map"
+  write-output  "16: Quit"
 
 
   $Choice = read-host -prompt "Please make a selection"
@@ -911,5 +1002,9 @@ do {
     {
       set-sippassword
     }
+  "15"
+    {
+      get-bcamap
+    }
   }
-} While ($choice -ne 15)
+} While ($choice -ne 16)

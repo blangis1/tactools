@@ -3,8 +3,270 @@ $scriptpath = $MyInvocation.MyCommand.Path
 $dir = split-path $scriptpath
 [void][system.reflection.Assembly]::LoadFrom("$dir" + "\MySql.Data.dll")
 
+#Load Assembly for file dialog.
+[void] [System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
+
 <#Defining all functions#>
 
+function get-authkeycount {
+
+  function authkeys {
+    <#Query DB for the FQDN of HQ #>
+    $query = 'SELECT t1.servers, t2.authkeys
+    FROM
+    (SELECT COUNT(*) AS servers FROM shoreware.vmservers WHERE servertype IN (1,5) ) AS t1,
+    
+    (SELECT COUNT(*) AS authkeys FROM shoreware.authenticatorpublickeys ) AS t2
+    ;
+     '
+    $Command = New-Object MySql.Data.MySqlClient.MySqlCommand($Query, $Connection)
+    $DataAdapter = New-Object MySql.Data.MySqlClient.MySqlDataAdapter($Command)
+    $DataSet = New-Object System.Data.DataSet
+    $RecordCount = $dataAdapter.Fill($dataSet, "data")
+    $DataSet.Tables[0]
+    
+  }
+
+
+
+  $MySQLAdminUserName = 'st_configread'
+  $MySQLAdminPassword = 'passwordconfigread'
+  $MySQLDatabase = 'shoreware'
+  $MySQLHost = 'localhost'
+  $ConnectionString = "server=" + $MySQLHost + ";port=4308;uid=" + $MySQLAdminUserName + ";pwd=" + $MySQLAdminPassword + ";database="+$MySQLDatabase + ";Convert Zero Datetime=True"
+
+  [void][System.Reflection.Assembly]::LoadWithPartialName("MySql.Data")
+  $Connection = New-Object MySql.Data.MySqlClient.MySqlConnection
+  $Connection.ConnectionString = $ConnectionString
+  $Connection.Open()
+  
+  
+
+   authkeys | ft 
+ 
+  
+ 
+
+  $Connection.Close()
+  }
+
+  
+  function test-voicemailtoemail
+  {
+  $ErrorActionPreference = 'Stop'
+  import-module servermanager
+  $domain = read-host -prompt "What is your email domain?"
+  $mx = resolve-dnsname -type mx $domain | where-object {$_.querytype -eq 'a'}
+ 
+  
+  if ($mx -ne $null)
+      {
+           "Here are your MX Records"
+           $mx
+           ""
+           "Hold on while we test a connection to them..."
+           sleep 2
+          $testsmtp = Test-NetConnection $mx[1].name -port 25
+      }
+  else
+      {
+          ""
+          write-output "We could not resolve your mx record"
+          write-output "Please create an MX record that points to your mail server"
+          sleep 2
+          ""
+          return
+      }
+
+  if ($testsmtp.tcptestsucceeded -eq $True)
+      {
+      "We can connect to your email server. That's good!"
+      ""
+      }
+      else
+      {
+      "We can't connect to your email server. Looks like port 25 is likely blocked, or the mail server is listening on a different port"
+      sleep 2
+      ""
+      return
+      }
+  
+  
+  $Networks = Get-WmiObject Win32_NetworkAdapterConfiguration -ComputerName localhost | ? {$_.IPEnabled}
+  $ipblock= @(24,0,0,128,32,0,0,128,60,0,0,128,68,0,0,128,1,0,0,0,76,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,2,0,0,0,1,0,0,0,4,0,0,0,0,0,0,0,76,0,0,128,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,255,255,255,255)
+  $ipList = @()
+  $octet = @()
+  foreach ($Network in $Networks)
+     {
+       $ipList = $Network.IpAddress[0]
+          $octet += $ipList.Split(".")
+          $ipblock[36] +=1
+          $ipblock[44] +=1;
+     }
+  
+  $smtpserversetting = get-wmiobject -namespace root\MicrosoftIISv2 -computername localhost -Query "Select * from IIsSmtpServerSetting"
+  $ipblock += $octet
+  $smtpserversetting.RelayIpList = $ipblock
+  $smtpserversetting.put() >$null
+  
+  $to = read-host "What email address would you like to send a test email to?"
+  
+  send-mailmessage -to $to -from test@tactools.com -subject "TAC Tools Test Email" -body "If you've received this, voicemail to email should work." -SmtpServer $iplist
+  write-output "Make sure to also check your junk mail folder!"
+
+}
+<# CHECKING ENABLED SSL PROTOCOLS---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    .DESCRIPTION
+    Outputs the SSL protocols that the client is able to successfully use to connect to a server.
+ 
+    .NOTES
+ 
+    Copyright 2014 Chris Duck
+    http://blog.whatsupduck.net
+ 
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+ 
+    http://www.apache.org/licenses/LICENSE-2.0
+ 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+ 
+    .PARAMETER ComputerName
+    The name of the remote computer to connect to.
+ 
+    .PARAMETER Port
+    The remote port to connect to. The default is 443.
+ 
+    .EXAMPLE
+    Test-SslProtocols -ComputerName "www.google.com"
+   
+    ComputerName       : www.google.com
+    Port               : 443
+    KeyLength          : 2048
+    SignatureAlgorithm : rsa-sha1
+    Ssl2               : False
+    Ssl3               : True
+    Tls                : True
+    Tls11              : True
+    Tls12              : True
+#>
+function Test-SslProtocols {
+  param(
+    [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true,ValueFromPipeline=$true)]
+    $ComputerName,
+     
+    [Parameter(ValueFromPipelineByPropertyName=$true)]
+    [int]$Port = 443
+  )
+  begin {
+    $ProtocolNames = [System.Security.Authentication.SslProtocols] | gm -static -MemberType Property | ?{$_.Name -notin @("Default","None")} | %{$_.Name}
+  }
+  process {
+    $ProtocolStatus = [Ordered]@{}
+    $ProtocolStatus.Add("ComputerName", $ComputerName)
+    $ProtocolStatus.Add("Port", $Port)
+    $ProtocolStatus.Add("KeyLength", $null)
+    $ProtocolStatus.Add("SignatureAlgorithm", $null)
+     
+    $ProtocolNames | %{
+      $ProtocolName = $_
+      $Socket = New-Object System.Net.Sockets.Socket([System.Net.Sockets.SocketType]::Stream, [System.Net.Sockets.ProtocolType]::Tcp)
+      $Socket.Connect($ComputerName, $Port)
+      try {
+        $NetStream = New-Object System.Net.Sockets.NetworkStream($Socket, $true)
+        $SslStream = New-Object System.Net.Security.SslStream($NetStream, $true)
+        $SslStream.AuthenticateAsClient($ComputerName,  $null, $ProtocolName, $false )
+        $RemoteCertificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]$SslStream.RemoteCertificate
+        $ProtocolStatus["KeyLength"] = $RemoteCertificate.PublicKey.Key.KeySize
+        $ProtocolStatus["SignatureAlgorithm"] = $RemoteCertificate.SignatureAlgorithm.FriendlyName
+        $ProtocolStatus["Certificate"] = $RemoteCertificate
+        $ProtocolStatus.Add($ProtocolName, $true)
+      } catch  {
+        $ProtocolStatus.Add($ProtocolName, $false)
+      } finally {
+        $SslStream.Close()
+      }
+    }
+    [PSCustomObject]$ProtocolStatus
+  }
+}
+ 
+<# END OF SSL CHECK MODULES #>
+function get-userslockedout {
+
+  function lockout {
+    <#Query DB for the FQDN of HQ #>
+    $query = 'SELECT guiloginname, passwordlockedoutUTCTime FROM shoreware.users WHERE passwordlockedoututctime >= UTC_TIMESTAMP();'
+    $Command = New-Object MySql.Data.MySqlClient.MySqlCommand($Query, $Connection)
+    $DataAdapter = New-Object MySql.Data.MySqlClient.MySqlDataAdapter($Command)
+    $DataSet = New-Object System.Data.DataSet
+    $RecordCount = $dataAdapter.Fill($dataSet, "data")
+    $DataSet.Tables[0]
+    
+  }
+
+
+
+  $MySQLAdminUserName = 'st_configread'
+  $MySQLAdminPassword = 'passwordconfigread'
+  $MySQLDatabase = 'shoreware'
+  $MySQLHost = 'localhost'
+  $ConnectionString = "server=" + $MySQLHost + ";port=4308;uid=" + $MySQLAdminUserName + ";pwd=" + $MySQLAdminPassword + ";database="+$MySQLDatabase + ";Convert Zero Datetime=True"
+
+  [void][System.Reflection.Assembly]::LoadWithPartialName("MySql.Data")
+  $Connection = New-Object MySql.Data.MySqlClient.MySqlConnection
+  $Connection.ConnectionString = $ConnectionString
+  $Connection.Open()
+  
+  
+
+  $lockout = lockout | ft guiloginname, passwordlockedoututctime 
+  $lockout | ft
+  
+ 
+
+  $Connection.Close()
+  }
+function test-tls1 
+{
+  ""
+  "Checking if TLS 1.0 is disabled"
+  sleep 2
+  $path = "HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.0\server"
+  if(Test-Path -path $path )
+  {
+    $val = get-itemproperty -path $path | select-object enabled
+  
+    if ($val.enabled -eq 0)
+    {
+      write-host "TLS 1.0 is disabled and CAS functionality will be impacted" -foregroundcolor Red
+      sleep 3
+    } 
+    else
+    {
+      write-host "TLS 1.0 is Enabled" -ForegroundColor Green
+      Sleep 3
+    }
+  }
+
+}
+function test-ecccert
+{
+  $hqip=(get-itemproperty "hklm:\software\wow6432node\shoreline teleworks\" -name hqserveraddress).hqserveraddress
+  $hqip = $hqip + ':443'
+  $SD=(get-itemproperty "hklm:\software\wow6432node\shoreline teleworks\" -name localrootdir).localrootdir
+  $keystore=(get-itemproperty "hklm:\software\wow6432node\shoreline teleworks\" -name keystoredirectory).keystoredirectory
+  $cert=(get-itemproperty "hklm:\software\wow6432node\shoreline teleworks\" -name servercertificatefile).servercertificatefile
+  $key=(get-itemproperty "hklm:\software\wow6432node\shoreline teleworks\" -name serverkeyfile).serverkeyfile
+  $eccpem = $keystore + "\certs\forECC_hq_ca.pem"
+  openssl s_client -connect $hqip -CAfile $eccpem -cert $cert -key $key
+
+}
 function set-ADautologin {
 
   function fqdn {
@@ -100,10 +362,21 @@ function get-ldappath
   elseif ($count -eq "3")
   {
     "Your LDAP Path should be:"
-    "LDAP://" + $domain + "/dc="+$domainarray[0]+",dc="+$domainarray[1] + ",dc="+$domainarray[3]
+    "LDAP://" + $domain + "/dc="+$domainarray[0]+",dc="+$domainarray[1] + ",dc="+$domainarray[2]
     ""
-    Sleep 5
+    Sleep 2
   }
+  Add-Type -AssemblyName System.DirectoryServices.AccountManagement            
+  $UserPrincipal = [System.DirectoryServices.AccountManagement.UserPrincipal]::Current            
+  if($UserPrincipal.ContextType -eq "Machine") {            
+    return "We can't recommend username format as you are not logged in with a domain account."            
+  } elseif($UserPrincipal.ContextType -eq "Domain") {
+    $unformat = whoami            
+    "The username format that should be used in Director is " + $unformat 
+    ""
+    sleep 5          
+  }            
+   
 }
 
 function restore-clientinstall
@@ -119,7 +392,7 @@ function restore-clientinstall
   {
     Y
     {
-      c:\windows\system32\inetsrv\appcmd.exe set vdir "Default web site/shorewareresources/" -physicalpath:"C:\Program Files (x86)\Shoreline Communications\ShoreWare Server\ShoreWare Resources"
+      cmd /C 'c:\windows\system32\inetsrv\appcmd.exe set vdir "Default web site/shorewareresources/" -physicalpath:"C:\Program Files (x86)\Shoreline Communications\ShoreWare Server\ShoreWare Resources"'
       ""
       "We think we've fixed it! Please test the Client Install Page."
       sleep 5
@@ -139,19 +412,24 @@ function restore-clientinstall
 
 function test-cas
 {
+  ""
+  write-host "Auto Detecting Certificate and File paths"
+  Sleep 2
+  
   <#check IIS bindings#>
   Echo ""
   Echo "Checking IIS binding vs Keystore"
-  Echo ""
-  Echo ""
     
   $iisbinding = Get-ChildItem -path IIS:\SslBindings | where-object {$_.port -eq 443}
   $iisthumbprint=$iisbinding.thumbprint
-  $sdpath = Read-host -prompt "What volume is your Shoreline Data folder on, please include the :\ (ie C:\ or E:\)"
-  $certpath1 = $sdpath + 'shoreline data\keystore\certs\server.crt'
+  
+ 
+  $certpath1 = (get-itemproperty "hklm:\software\wow6432node\shoreline teleworks\" -name servercertificatefile).servercertificatefile
   $servercert = openssl x509 -noout -fingerprint -in $certpath1 
+  $servercert = $servercert = $servercert -replace'[:]',""
+  $servercert = $servercert.substring(17)
     
-  If ($iisthumbprint=$servercert)
+  If ($iisthumbprint -eq $servercert)
   {
     write-host "IIS binding matches Keystore" -foregroundcolor Green
   }
@@ -167,9 +445,9 @@ function test-cas
   <#Check Server.crt and Private.key to make sure they match#>
   "Checking server.crt and server.key to ensure there is no private key mismatch"  
   
-  $certpath1 = $SDpath + 'shoreline data\keystore\certs\server.crt'
+  $certpath1 = (get-itemproperty "hklm:\software\wow6432node\shoreline teleworks\" -name servercertificatefile).servercertificatefile
   $owncertmod = openssl x509 -noout -modulus -in $certpath1 
-  $keypath = $SDpath + 'shoreline data\keystore\private\server.key'
+  $keypath = (get-itemproperty "hklm:\software\wow6432node\shoreline teleworks\" -name serverkeyfile).serverkeyfile
   $ownkeymod = openssl rsa -noout -modulus -in $keypath
         
   $matchcheck = $owncertmod -eq $ownkeymod
@@ -191,10 +469,12 @@ function test-cas
   Echo " "
   Echo " "
   <#$volume = Read-host -prompt "What volume is your Shoreline Data folder on, please include the :\ (ie C:\ or E:\)" #>
-  $certpath1 = $SDpath + 'shoreline data\keystore\certs\server.crt'
-  $servercert = openssl x509 -noout -fingerprint -in $certpath1 
-  $volume2 = Read-host -prompt "What volume is your Shoreline Communications folder on, please include the :\ (ie C:\ or E:\)"
   
+  $servercert = openssl x509 -noout -fingerprint -in $certpath1 
+ #$volume2 = Read-host -prompt "What volume is your Shoreline Communications folder on, please include the :\ (ie C:\ or E:\)"
+ $volume2 = (get-itemproperty "hklm:\SOFTWARE\WOW6432Node\Shoreline Teleworks\ShoreWare Server" -name location).location 
+ $volume2 = $volume2.substring(0,3)
+
   <# Check if DVS #>
   $key = 'hklm:\software\wow6432node\shoreline teleworks\'
   $ifdvs = (get-itemproperty -path $key -name isremoteserver).isremoteserver
@@ -231,14 +511,26 @@ function test-cas
   Sleep 2
     
   <#end checking server.crt and nginx.crt #>   
-
+ 
+  <#Check size of the server.crt file. Anything less than 2KB means only 1 certificate is installed.#>
+ $certsize = (Get-ChildItem $certpath1).length/1KB
+ if ($certsize -lt 2)
+ {
+    "It looks like the whole certificate chain is not installed. This can cause CAS to fail for 6900 series phones. If you are using ShoreTel signed certificates, you can safely ignore this warning"
+    ""
+ }
+ else
+ {
+   write-host "Whole certificate chain is installed" -foregroundcolor Green
+   Sleep 2
+  ""
+ }
 
   <#Checking IIS logs, service IP, intermediates in root store #>
   Echo "Checking if Shoretel HW Root is Present"
   $HWroot = Get-ChildItem Cert:\LocalMachine\Root | Where-object{$_.Thumbprint -eq "‎191a1c5696f2bff780d0187f5735040e5caf2b0d"}
   If (!$hwroot) 
-  {
-       
+  {   
     write-host "HW Root is not installed, CAS authentication will fail" -ForegroundColor Red
     $importroot = read-host -prompt "Would you like to reimport the HW root certificate to the trusted root store? Y/N"
         
@@ -262,8 +554,6 @@ function test-cas
       }
     }
   }
-
-
   else
   {
     write-host "HW root is installed" -foregroundcolor Green
@@ -271,9 +561,55 @@ function test-cas
     $hwrootinstalled = "1"
   }
 
-  echo ""
-  echo ""
-    
+    <#6900 series section#>
+   <#Checking Mitel root CA #>
+   <#Checking Mitel root CA #>
+   
+   ""
+   Echo "Checking if Mitel Product Root CA is Present"
+   $MitelHWroot = Get-ChildItem Cert:\LocalMachine\Root | Where-object{$_.Thumbprint -eq "2ece1b7e0d824d4168e1e011657187415719f2d9"}
+   
+   if (!$mitelhwroot) 
+   
+   {
+        
+     write-host "Mitel Product Root CA is not installed CAS authentication for 6900 series phones will fail" -ForegroundColor Red
+     $importroot = read-host -prompt "Would you like to reimport the HW root certificate to the trusted root store? Y/N"
+         
+     Switch ($importroot) 
+     { 
+       Y 
+       {
+         <#$SDpath = Read-host -prompt "What volume is your Shoreline Data folder on, please include the :\ (ie C:\ or E:\)"#>
+         $hwrootpath = $SDpath + 'shoreline data\keystore\certs\mitel_mfg_ca.crt'
+         Set-Location -path Cert:\LocalMachine\Root
+         Import-Certificate -filepath $HWrootpath
+         ECHO ""
+         Write-host "Mitel Product Root CA has been imported."
+         Sleep 5
+          
+       }
+         
+       N 
+       {
+         sleep 1
+       }
+     }
+   }
+   else
+   {
+     write-host "Mitel Product Root CA is installed" -foregroundcolor Green
+     Sleep 2
+     $hwrootinstalled = "1"
+   }
+ 
+   echo ""
+   echo ""
+ 
+  
+ 
+  
+  <#6900 series section#>
     
   Write-host "Checking IIS log file for 403 Forbidden"
   Sleep 2
@@ -373,8 +709,6 @@ function test-cas
 
   If ($env:HostIP -eq $serviceip)
   {
-    ""
-    ""
     write-host "Service IP address is currently set to the IP address of the server. No action required." -foregroundcolor green
     sleep 4
   }
@@ -386,7 +720,7 @@ function test-cas
   }
 
 
-
+  test-tls1
     
 }
     
@@ -438,9 +772,9 @@ function set-sippassword {
 
     $query = 'UPDATE users 
 
-SET SIPPassword = "7F0738393A3B3C3D" 
+      SET SIPPassword = "7F0738393A3B3C3D" 
 
-WHERE SIPPassword IS NULL'
+    WHERE SIPPassword IS NULL'
                               
     $Command = New-Object MySql.Data.MySqlClient.MySqlCommand($Query, $Connection)
     $DataAdapter = New-Object MySql.Data.MySqlClient.MySqlDataAdapter($Command)
@@ -477,90 +811,107 @@ WHERE SIPPassword IS NULL'
  
 }
 
+function get-bcamap {
 
-<# CHECKING ENABLED SSL PROTOCOLS---------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    .DESCRIPTION
-    Outputs the SSL protocols that the client is able to successfully use to connect to a server.
- 
-    .NOTES
- 
-    Copyright 2014 Chris Duck
-    http://blog.whatsupduck.net
- 
-    Licensed under the Apache License, Version 2.0 (the "License");
-    you may not use this file except in compliance with the License.
-    You may obtain a copy of the License at
- 
-    http://www.apache.org/licenses/LICENSE-2.0
- 
-    Unless required by applicable law or agreed to in writing, software
-    distributed under the License is distributed on an "AS IS" BASIS,
-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-    See the License for the specific language governing permissions and
-    limitations under the License.
- 
-    .PARAMETER ComputerName
-    The name of the remote computer to connect to.
- 
-    .PARAMETER Port
-    The remote port to connect to. The default is 443.
- 
-    .EXAMPLE
-    Test-SslProtocols -ComputerName "www.google.com"
-   
-    ComputerName       : www.google.com
-    Port               : 443
-    KeyLength          : 2048
-    SignatureAlgorithm : rsa-sha1
-    Ssl2               : False
-    Ssl3               : True
-    Tls                : True
-    Tls11              : True
-    Tls12              : True
-#>
-function Test-SslProtocols {
-  param(
-    [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true,ValueFromPipeline=$true)]
-    $ComputerName,
-     
-    [Parameter(ValueFromPipelineByPropertyName=$true)]
-    [int]$Port = 443
-  )
-  begin {
-    $ProtocolNames = [System.Security.Authentication.SslProtocols] | gm -static -MemberType Property | ?{$_.Name -notin @("Default","None")} | %{$_.Name}
+  function bcamap {
+
+    $query = 'SELECT DISTINCT t1.BCAEXT, t1.switchid AS "BCA Current Switch", t1.callstackdepth AS "BCA CallStack", t1.userdn AS MonitoringDN, t2.currentswitchid AS "Monitoring Users Current Switch" 
+      FROM
+      (SELECT mae_dn AS BCAEXT, maes.switchID, userprogbuttons.userdn,callstackdepth 
+      FROM maes
+      LEFT JOIN userprogbuttons
+      ON mae_dn = userprogbuttons.dialnumberdn 
+      ) AS T1
+
+      LEFT JOIN
+      (SELECT userprogbuttons.userdn, usercurrentswitch.currentswitchid
+      FROM userprogbuttons
+      LEFT JOIN usercurrentswitch
+      ON userprogbuttons.userdn = usercurrentswitch.userdn) AS T2
+      ON (t1.userdn = t2.userdn) 
+      ORDER BY monitoringdn
+    ;'
+                              
+    $Command = New-Object MySql.Data.MySqlClient.MySqlCommand($Query, $Connection)
+    $DataAdapter = New-Object MySql.Data.MySqlClient.MySqlDataAdapter($Command)
+    $DataSet = New-Object System.Data.DataSet
+    $RecordCount = $dataAdapter.Fill($dataSet, "data")
+    $DataSet.Tables[0]
+    
   }
-  process {
-    $ProtocolStatus = [Ordered]@{}
-    $ProtocolStatus.Add("ComputerName", $ComputerName)
-    $ProtocolStatus.Add("Port", $Port)
-    $ProtocolStatus.Add("KeyLength", $null)
-    $ProtocolStatus.Add("SignatureAlgorithm", $null)
-     
-    $ProtocolNames | %{
-      $ProtocolName = $_
-      $Socket = New-Object System.Net.Sockets.Socket([System.Net.Sockets.SocketType]::Stream, [System.Net.Sockets.ProtocolType]::Tcp)
-      $Socket.Connect($ComputerName, $Port)
-      try {
-        $NetStream = New-Object System.Net.Sockets.NetworkStream($Socket, $true)
-        $SslStream = New-Object System.Net.Security.SslStream($NetStream, $true)
-        $SslStream.AuthenticateAsClient($ComputerName,  $null, $ProtocolName, $false )
-        $RemoteCertificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]$SslStream.RemoteCertificate
-        $ProtocolStatus["KeyLength"] = $RemoteCertificate.PublicKey.Key.KeySize
-        $ProtocolStatus["SignatureAlgorithm"] = $RemoteCertificate.SignatureAlgorithm.FriendlyName
-        $ProtocolStatus["Certificate"] = $RemoteCertificate
-        $ProtocolStatus.Add($ProtocolName, $true)
-      } catch  {
-        $ProtocolStatus.Add($ProtocolName, $false)
-      } finally {
-        $SslStream.Close()
-      }
-    }
-    [PSCustomObject]$ProtocolStatus
-  }
+
+
+
+  $MySQLAdminUserName = 'root'
+  $MySQLAdminPassword = 'shorewaredba'
+  $MySQLDatabase = 'shoreware'
+  $MySQLHost = 'localhost'
+  $ConnectionString = "server=" + $MySQLHost + ";port=4308;uid=" + $MySQLAdminUserName + ";pwd=" + $MySQLAdminPassword + ";database="+$MySQLDatabase
+
+  [void][System.Reflection.Assembly]::LoadWithPartialName("MySql.Data")
+  $Connection = New-Object MySql.Data.MySqlClient.MySqlConnection
+  $Connection.ConnectionString = $ConnectionString
+  $Connection.Open()
+  
+  
+  bcamap | ft
+  
+
+
+  $Connection.Close()
+  
+  
+  write-output ''
+  write-output ''
+  
+ 
 }
- 
-<# END OF SSL CHECK MODULES #>
 
+function get-bcabuttoncount {
+
+  function bcabuttoncount {
+
+    $query = '
+      SELECT dialnumberdn as "BCA being Monitored", count(*) as "Number of Programmable buttons for BCA" 
+      FROM shoreware.userprogbuttons where functionid=30 
+      group by dialnumberdn 
+      order by count(*) desc;
+    ;'
+                              
+    $Command = New-Object MySql.Data.MySqlClient.MySqlCommand($Query, $Connection)
+    $DataAdapter = New-Object MySql.Data.MySqlClient.MySqlDataAdapter($Command)
+    $DataSet = New-Object System.Data.DataSet
+    $RecordCount = $dataAdapter.Fill($dataSet, "data")
+    $DataSet.Tables[0]
+    
+  }
+
+
+
+  $MySQLAdminUserName = 'root'
+  $MySQLAdminPassword = 'shorewaredba'
+  $MySQLDatabase = 'shoreware'
+  $MySQLHost = 'localhost'
+  $ConnectionString = "server=" + $MySQLHost + ";port=4308;uid=" + $MySQLAdminUserName + ";pwd=" + $MySQLAdminPassword + ";database="+$MySQLDatabase
+
+  [void][System.Reflection.Assembly]::LoadWithPartialName("MySql.Data")
+  $Connection = New-Object MySql.Data.MySqlClient.MySqlConnection
+  $Connection.ConnectionString = $ConnectionString
+  $Connection.Open()
+  
+  
+  bcabuttoncount | ft
+  
+
+
+  $Connection.Close()
+  
+  
+  write-output ''
+  write-output ''
+  
+ 
+}
 function  get-totalrtcscore {
 
   function totalrtcscore {
@@ -694,8 +1045,46 @@ function Install-Prereqs {
     set-service "SMTPSVC" -startuptype Automatic
     set-service "ftpsvc" -startuptype Automatic
     set-service "qwave" -StartupType Automatic
-  }
+
+    $uacprompt = read-host "Would you like to disable UAC? Y/N"
+
+    switch ($uacprompt) {
+      Y { New-ItemProperty -Path HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System -Name EnableLUA -Value 0 -PropertyType DWord -Force}
+      Default {}
+    }
     
+    write-host "Would you like to disable base filtering engine and windows firewall?"
+    Write-host "BE AWARE. IF DOING THIS REMOTELY, THIS MAY CAUSE NETWORK SERVICE INTERRUPTION."
+    $firewallprompt = read-host "A reboot will be required to stop the services. Y/N"
+    
+    
+    switch ($firewallprompt) 
+    {
+      Y 
+      {
+        set-service mpssvc -StartupType Disabled 
+        set-service bfe -StartupType Disabled
+      }
+      Default {}
+    }
+
+    $DEP = read-host "Would you like to set DEP settings?. Y/N"
+    
+    
+    switch ($DEP) 
+    {
+      Y 
+      {
+        bcdedit /set nx OptIn
+      }
+      Default {}
+    }
+
+  
+  }
+    ""
+    sleep 2
+    "Please reboot to complete the configuration"
   else {write-output  "Done!"}
 }
 
@@ -707,6 +1096,23 @@ function get-prereqs {
   $Features2016 ="Web-*","web-whc", "qWave", "SMTP-Server", "MSMQ*", "net-*", "fs-fileserver", "fs-resource-manager", "net-framework-45-aspnet", "net-wcf-services45", "internet-print-client", "powershell*", "net-framework-features", "lpr-port-monitor", "server-media-foundation", "rsat-smtp", "rsat-fsrm-mgmt", "was*", "remote-assistance", "fs-smb1", "wow64*"
   If ($version -like "*6.*") {get-windowsfeature -name $features}
   elseif ($version -like "*10*") {get-windowsfeature -name $Features2016 | where {$_.name -ne "Web-application-proxy"}}
+
+  $esctemplate = $profile + '\documents\esctemplate\Esctemplate.txt'
+  $uaccheck = (Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System).EnableLUA
+  $depcheck = Get-WmiObject -Class Win32_OperatingSystem -Property DataExecutionPrevention_SupportPolicy | fl dataexecutionprevention_supportpolicy
+
+  ""
+
+  #Check if UAC is enabled
+  If ($uaccheck -eq "1") {"UAC is enabled"}
+  Else {"UAC is disabled" }
+
+  #Check status of DEP
+  If ($depcheck -eq "dataexecutionprevention_supportpolicy : 2") {"DEP is set to: Turn on DEP for Windows Programs and services only" }
+  ELSE {"DEP is set to: Tun on DEP for all programs and services except those I select" }
+
+  get-service bfe | fl displayname, StartType, status
+  get-service mpssvc | fl displayname, starttype, status
 }
 
 function get-escalationpackage {
@@ -793,7 +1199,99 @@ function get-escalationpackage {
   invoke-item $path
 }
 
+function autodbimport {
+  
+  
+  $guipassword = read-host -prompt "What guiloginpassword would you like to use?"
+  $tuipassword = read-host -prompt "what tuipasswod would you like to use (SIP password)"
+  $q = read-host -prompt "Would you like your users to be AD integrated? Y/N"
+  ""
+  Write-Host "Please select where to save your outcsv file"
+  sleep 1
+  
+  $savefile = new-object -typename System.Windows.Forms.SaveFileDialog    
+  $savefile.showdialog()
+ 
 
+  
+  switch ($q) 
+  {
+      "Y" 
+        {   
+            $ADINT = $true
+            $ldapuser = "Active Directory"
+
+            $emailsync = read-host -prompt "Would you like to sync the email address field instead of user principal name? Y/N"
+        
+              switch ($emailsync)
+                {
+                  "Y" 
+                  {
+                 
+                  #Get Active Directory Domain pre-2000 style#
+                  $addomain = get-addomain | select-object netbiosname
+                  $addomain = $addomain.netbiosname
+      
+                  #Get all the members of the group connectprovision and format the column headers to work with db-import#
+  
+                  $members = get-adgroupmember connectprovision | get-aduser -properties * | select-object  @{L='FirstName';E={$_.givenname}}, @{L='Lastname';E={$_.surname}}, @{L='guiloginname';E={$_.emailaddress}}, @{L='guipassword';E={$guipassword}}, @{L='tuipassword';E={$tuipassword}}, @{L='ntloginname';E={"$($addomain)\$($_.samaccountname)"}}, @{L='ldapuser';E={$ldapuser}}
+                  $members | ConvertTo-Csv -NoTypeInformation | % { $_ -replace '"', ""}  | out-file $savefile.filename -fo -en ascii
+                  }
+                  "N"
+                  {
+                 
+                  #Get Active Directory Domain pre-2000 style#
+                  $addomain = get-addomain | select-object netbiosname
+                  $addomain = $addomain.netbiosname
+      
+                  #Get all the members of the group connectprovision and format the column headers to work with db-import#
+  
+                  $members = get-adgroupmember connectprovision | get-aduser -properties * | select-object  @{L='FirstName';E={$_.givenname}}, @{L='Lastname';E={$_.surname}}, @{L='guiloginname';E={$_.userprincipalname}}, @{L='guipassword';E={$guipassword}}, @{L='tuipassword';E={$tuipassword}}, @{L='ntloginname';E={"$($addomain)\$($_.samaccountname)"}}, @{L='ldapuser';E={$ldapuser}} 
+                  $members | ConvertTo-Csv -NoTypeInformation | % { $_ -replace '"', ""}  | out-file $savefile.filename -fo -en ascii
+                  }
+
+                }
+
+        }
+                  "N" 
+                  {
+          $ADINT = $false
+          $ldapuser = "Non-LDAP user"
+
+           $members = get-adgroupmember connectprovision | get-aduser -properties * | select-object @{L='FirstName';E={$_.givenname}}, @{L='Lastname';E={$_.surname}}, @{L='guiloginname';E={$_.userprincipalname}}, @{L='guipassword';E={$guipassword}}, @{L='tuipassword';E={$tuipassword}}
+           $members | ConvertTo-Csv -NoTypeInformation | % { $_ -replace '"', ""}  | out-file $savefile.filename -fo -en ascii
+                  }
+
+  }
+  
+  
+  Write-Output "CSV file created"
+  
+  $clear = read-host -Prompt "Would you like to clear the membership of your AD group? Y/N"
+  switch ($clear)
+  {
+      "Y"
+          {
+           $clearmember = get-adgroupmember connectprovision 
+           remove-adgroupmember connectprovision -members $clearmember
+           write-output "AD group has been cleared"
+          }
+  
+      "N"
+          {
+          sleep 1
+          }
+  
+  
+  }
+  
+  "Your file has been created at " + $savefile.filename + " Please copy this to the HQ server and use it to run dbimport."
+  ""
+  sleep 3
+  
+  
+  
+}
   
 
 import-module WebAdministration
@@ -814,10 +1312,16 @@ do {
   write-output  "9: Test WSS for missing 1.key file"
   write-output  "10: Get Database process list"
   write-output  "11: Restore ClientInstall page"
-  write-output  "12: Get LDAP Path"
+  write-output  "12: Get LDAP Path / AD integration setup"
   write-output  "13: Setup AD auto-login on HQ KB 000014134"
   write-output  "14: Correct Blank SIP Passwords"
-  write-output  "15: Quit"
+  write-output  "15: Get BCA Map"
+  write-output  "16: Get BCA Button Count"
+  write-output  "17: Test ECC Certificate"
+  write-output  "18: Create dbimport CSV File"
+  write-output  "19: Get list of currently locked out accounts"
+  write-output  "20  Test Voicemail to Email"
+  write-output  "21: Quit"
 
 
   $Choice = read-host -prompt "Please make a selection"
@@ -828,10 +1332,20 @@ do {
  
 
     "1"{
-      $owncertpath = read-host -prompt 'Please enter the full path to your certificate public key (Example c:\certs\wildcard.crt)'
-      $ownkeypath =  read-host -prompt 'Please enter the full path to your private key (Example c:\certs\key.key)'
-      $owncertmod = openssl x509 -noout -modulus -in $owncertpath 
-      $ownkeymod = openssl rsa -noout -modulus -in $ownkeypath
+      #$owncertpath = read-host -prompt 'Please enter the full path to your certificate public key (Example c:\certs\wildcard.crt)'
+      write-host "Please select the certitifcate"
+      sleep 1
+      $owncertpath = New-Object System.Windows.Forms.OpenFileDialog -Property @{ InitialDirectory = [Environment]::GetFolderPath('Desktop') }
+      $null = $owncertpath.ShowDialog()
+
+      #$ownkeypath =  read-host -prompt 'Please enter the full path to your private key (Example c:\certs\key.key)'
+      write-host "please select the private key"
+      sleep 1 
+      $ownkeypath = New-Object System.Windows.Forms.OpenFileDialog -Property @{ InitialDirectory = [Environment]::GetFolderPath('Desktop') }
+      $null = $ownkeypath.ShowDialog()
+
+      $owncertmod = openssl x509 -noout -modulus -in $owncertpath.filename 
+      $ownkeymod = openssl rsa -noout -modulus -in $ownkeypath.filename
       $matchcheck = $owncertmod -eq $ownkeymod
       IF ($matchcheck -eq $True)
       {
@@ -842,31 +1356,6 @@ do {
         Write-host "Your certificate and private key do not match" -foregroundcolor Red
       }
       Sleep 5
-    }
-
-
-    "2"
-    {
-      Echo "This script will compare the server.crt and server.key file from your keystore to ensure they match."
-      Echo " "
-      Echo " "
-      $volume = Read-host -prompt "What volume is your Shoreline Data folder on, please include the :\ (ie C:\ or E:\)"
-      $certpath = $volume + 'shoreline data\keystore\certs\server.crt'
-      $privkeypath = $volume + 'shoreline data\keystore\private\server.key'
-      $cert = openssl x509 -noout -modulus -in $certpath 
-      $privkey = openssl rsa -noout -modulus -in $privkeypath 
-      $matchcheck = $cert -eq $privkey
-      IF ($matchcheck -eq $True)
-      {
-        Write-host "Your certificate and private key match" -foregroundcolor Green
-      }
-      else
-      {   
-        Write-host "Your certificate and private key do not match" -foregroundcolor Red
-      }
-  
-      Sleep 5
-
     }
 
     "2"
@@ -900,13 +1389,10 @@ do {
     {
       get-escalationpackage
     } 
-      
     "7"
     {
-      $hostname = read-host -prompt "What is the FQDN of the server you would like to test. This FQDN should be what is set in director."
-      Test-SslProtocols $hostname 
-
-    }
+      Test-SslProtocols
+    }  
     "8"
     {
       get-totalrtcscore
@@ -936,5 +1422,29 @@ do {
     {
       set-sippassword
     }
+    "15"
+    {
+      get-bcamap
+    }
+    "16"
+    {
+      get-bcabuttoncount
+    }
+    "17"
+    {
+      test-ecccert
+    }
+    "18"
+    {
+      autodbimport
+    }
+    "19"
+    {
+      get-userslockedout
+    }
+    "20"
+    {
+      test-voicemailtoemail
+    }
   }
-} While ($choice -ne 15)
+} While ($choice -ne 21)
